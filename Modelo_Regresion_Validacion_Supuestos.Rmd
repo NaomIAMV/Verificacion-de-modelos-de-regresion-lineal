@@ -1,0 +1,219 @@
+---
+title: "Modelado y validación de supuestos de regresión en R"
+subtitle: "Desempeño académico y porcentaje de comidas gratuitas"
+author: "Monsalvo Velázquez Naomi Adai"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: false
+    highlight: tango
+    latex_engine: pdflatex
+geometry: margin=2.3cm
+fontsize: 10pt
+header-includes:
+  - \usepackage{longtable}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = NA,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 3.5,
+  out.width = "100%"
+)
+```
+
+Este documento organiza el ejercicio académico original en secciones de análisis. Las interpretaciones están transcritas del trabajo original.
+
+# Preparación e importación
+
+```{r preparar-entorno, results='hide'}
+
+rm(list = ls(all.names = TRUE))
+gc()
+
+#Primero vamos a cargar las librerias 
+library(ggplot2)
+library(lmtest)
+library(car)
+library(multcomp)
+
+# Cargamos la base de datos
+Datos <- read.csv("C:/Users/naomi/OneDrive/Documents/ModelosNP/performance.csv", header = TRUE)
+
+```
+
+
+# i. Ajuste del modelo inicial y verificación de supuestos
+
+i. Ajustar un modelo de regresión lineal simple. Verificar los supuestos a partir de este modelo. Deberá indicar para cada supuesto qué gráfica o prueba sirve para argumentar el cumplimiento o no del supuesto
+
+
+```{r modelo-inicial, fig.cap="Diagnósticos del modelo inicial"}
+
+#Modelo 1. observamos sin modificar las variables de nuestra base datos 
+Ajuste1 <- lm(api00 ~ meals, data = Datos)
+
+# Primero veremos como se ven los supuestos de linealidad, homocedasticidad y normalidad de nuestros datos 
+# X11()  # No se ejecuta al tejer R Markdown
+par(mfrow=c(1,3), mar=c(4, 4, 4, 1)) 
+plot(Ajuste1, 1, main=" Linealidad", sub.caption="") 
+plot(Ajuste1, 3, main=" Homocedasticidad", sub.caption="") 
+plot(Ajuste1, 2, main=" Normalidad", sub.caption="")
+
+# Aplicaremos las pruebas linealidad y homocedasticidad 
+lmtest::bptest(Ajuste1)
+car::ncvTest(Ajuste1)
+
+# Para boxTidwell, sumamos una constante (+1) a 'meals' 
+# dado que sabemos que la prueba no acepta valores de cero, es por esto que sumamos esta constante 
+Datos$meals_pos <- Datos$meals + 1
+car::boxTidwell(api00 ~ meals_pos, data = Datos)
+
+```
+
+
+## Interpretación original del modelo inicial
+
+- Gráfica Residuals vs Fitted, es decir Linealidad,mientras que en la grafica podemos observar que el comportamiento forma una linea curveada lo que nos indica no es lineal, sin embargo usamos Box-Tidwell para confirmarlo y para esto usa de hipotesis H0: Es lineal (el parámetro lambda = 1) H1: NO es lineal (lambda distinto de 1). En este caso el valor de p-value de p=0.025, asi dado por esto y debido a que p< 0.05 notamos que el supuesto de linealidad NO se cumple.
+
+- Gráfica - Scale-Location, es decir homocedasticidad, observamos que la linea no es horizontal completamente y los puntos se ven bastantes dispersos, sin embargo usamos las pruebas bptest que nos dio un valor de p-value de p=0.0019) y la prueba ncvTest cuyo resultado fue p=0.0017, recordando que las dos pruebas tomas como hipotesis H0: Varianza constante vs H1: Varianza no constante Y que el valor obtenido de ambas pruebas fueron menores de 0.05, es decir p< 0.05, entonces rechazamos H0 es decir, conlcuimos que el supuesto de homocedasticidad NO se cumple.
+
+- Gráfica  Q-Q residuals, es decir normalidad, en nuestra gráfica  vemos que los puntos en el centro de la linea caen sobre ella, pero en los extremos algunos puntos se alejan
+
+
+# ii. Transformación de variables y segundo modelo
+
+a. Para transformar la variable Y= academic academic performance of the school (api00) usaremos BoxCox para observar que valor de lambda que sugiere transformar a nuestra variable Y
+
+
+```{r prueba-transformacion}
+
+summary(car::powerTransform(Ajuste1))
+
+```
+
+
+## Interpretación de la transformación 
+
+Observamos que en nuestra salida, el valor de labmbda obtenido es de 1.5883 Sin embargo, recordando que usualmente el valor de la transformacion que normalmente usamos es elevar al cuadrado, entonces pimero intentaremos aplicar esta tranformacion
+
+
+```{r modelo-transformado, fig.cap="Diagnósticos del modelo transformado"}
+
+# Transformamos la variable Y, de acuerdo a lo que obtuvimos de la salida anterior 
+Datos$api00_cuad <- Datos$api00^2
+
+# Realizamos un ajuste al Modelo II tomando la transformacion de la variable Y que ya vimos 
+Ajuste2 <- lm(api00_cuad ~ meals, data = Datos)
+
+# Volvimos a generar las graficas de los supuestos de linealidad, homocedasticidad y normalidad 
+# X11()  # No se ejecuta al tejer R Markdown
+par(mfrow=c(1,3), mar=c(4, 4, 4, 1)) 
+plot(Ajuste2, 1, main="Linealidad (modelo 2)", sub.caption="")
+plot(Ajuste2, 3, main="Homocedasticidad (modelo 2)", sub.caption="")
+plot(Ajuste2, 2, main="Normalidad (modelo 2)", sub.caption="")
+
+lmtest::bptest(Ajuste2)
+shapiro.test(resid(Ajuste2))
+
+```
+
+
+## Interpretación del segundo modelo
+
+Ajustamos el modelo 2 y obtenemos E(y^2 ; x) = beta_0 + beta_1 * x, donde y = api00, x = meals Es decir: E[api00^2; meals] = b0 + b1 * meals. Tranformamos la variable Y al elevarla al cuadrado, esto debido a nuestra prueba BoxCox. Pero para verificarlo observamos el cambio que presentan las gráficas de nuestros supuestos, pero con nuestra varibale Y transformada. Y vemos que:
+
+- Gráfica Residuals vs Fitted donde nuestro supuesto de linealidad: E(y_i ; x_i) = beta_0 + beta_1 * x_i): Mientras que en el modelo anterior se veía una curva, en esta nueva gráfica vemos que la linea es muchisimo mas recta, cercana a ser completamente horizontal, es por esto que podriamos concluir que se cumple la linealidad
+
+- Gráfica Scale-Location donde nuestro supuesto de homocedasticidad: Var(epsilon_i) = sigma^2: Observamos que los puntos se ven dispersos y la línea central tiene una curva menos prominente que la del modelo 1 Sin embargo para confirmar si se cumple el supuesto usamos bptest que toma las hipótesis: H0: La varianza es constante H1: La varianza NO es constante Al correr la prueba nos dio un p-value = 0.4188 y dado que p > 0.05, entonces NO rechazamos H0 Es por esto que concluimos que hay evidencia estadisticas suficiente para decir que el supuesto de homocedasticidad no se cumple
+
+- Gráfica Q-Q residuals, el supuesto de normalidad En la grafica notamos que visualmente no hay gran cambio, es decir los valores continuan estando bastante cerca que en la grafica anterior, sin embargo para estar seguros que se cumple normalidad aplicamos shapiro-test cuyas hipotesis que toma son: H0: Los errores provienen de la distribución Normal H1: Los errores NO provienen de la distribución Normal lo que nos dio como resultado un p-value = 0.3838,y como p > 0.05, NO rechazamos H0 Por lo que concluimos que se cumple la normalidad en este modelo Asi al modificar nuestra base transformando la variable Y (elevándola al cuadrado) notamos que da como resultado que los supuestos de linealidad, homocedasticidad y normalidad se cumplan Es por esto que no hicimos un cambio a la variable X (meals)
+
+
+# iii. Comparación de los modelos
+
+
+```{r comparacion-modelos, fig.width=7, fig.height=5, fig.cap="Comparación de los modelos en escala original"}
+
+# X11() 
+par(mfrow=c(1,1), mar=c(5, 4, 4, 2))
+plot(Datos$meals, Datos$api00, xlab="Meals", ylab="API00", pch=19, col="green", 
+     main="Comparación de Modelos 1 y 2")
+
+# Recta de regresión del Modelo 1
+abline(Ajuste1, col="red", lwd=2)
+
+# Curva del Modelo II regresada a la escala original (Verde)
+# Como elevamos al cuadrado, la operación inversa es la RAÍZ CUADRADA
+curva <- function(x){ sqrt(Ajuste2$coefficients[1] + Ajuste2$coefficients[2]*x) }
+curve(curva, add = TRUE, col="blue", lwd=3)
+
+legend("topright", legend=c("Modelo 1", "Modelo 2"), 
+       col=c("red", "blue"), lty=1, lwd=2)
+
+```
+
+
+## Interpretación original de la comparación
+
+Creamos una gráfica que presente ambos modelos y los puntos originales de la base de datos Sin embargo dado que el ejercicio pide la gráfica en escala original, notamos que nosotros modificamos la variable Y, elevandola al cuadrado de esta forma: E(y^2 ; x) = beta_0 + beta_1 * x, es por esto que vamos a despejar la variable Y sola, por lo que aplicamos raiz cuadrada para dejar solo la varibale Y: y = sqrt(beta_0 + beta_1 * x) y asi obtenemos la grafica del modelo 2 colocado en la escala orginal, es decir con y = academic performance of the school (api00) y x = percentage of students receiving free meals (meals).
+
+
+# iv. Coeficiente de determinación y ANOVA
+
+
+```{r evaluacion-modelo}
+
+summary(Ajuste2) # Usamos summary para obtener el coeficiente de determinacion de R^2
+anova(Ajuste2)   # Aplicamos la prueba ANOVA
+
+```
+
+
+## Interpretación original de los resultados
+
+-Para el modelo 2 obtuvimos que el coeficiente de determinación fue R-squared:  0.8286,sabemos que este coeficiente nos ayuda a medir la eficacia de ajuste en los datos de la base, asi entonces como obtuvimos R-squared sabemos que aprox el 82.86% de la variabilidad de Y en escala cuadratica se explica dado el porcentaje de la otra variable (X), asi podemos saber que el 17.14% restante es la variacion de valores que no se consideraron
+
+Por otro lado hicimos el ANOVA test, dicho test nos permite revisar el nivel de significancia del modelo, tomando las siguientes hipotesis: H0: beta_1 = 0 (beta_1 = 0 quiere decir que nuestro modelo no ayuda a explicar a Y) H1: beta_1 != 0 (El modelo sí es significativo para modelar a Y) Nosotros obtuvimos como resultado: Analysis of Variance Table Response: api00_cuad Df     Sum Sq    Mean Sq F value    Pr(>F) meals       1 1.1577e+13 1.1577e+13  1923.8 < 2.2e-16 *** Residuals 398 2.3950e+12 6.0176e+09
+
+--- Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Lo que quiere decir que p < 0.05, es decir, rechazamos H0 por lo tanto el modelo si es significativo para modelar a y = academic performance of the school (api00)
+
+
+# v. Prueba de hipótesis con el modelo final
+
+v.Con el modelo final ayude a un investigador a argumentar a favor o en contra de la hipótesis: “A mayor porcentaje de comidas gratis en la escuela es menor el desempeño de la escuela”.
+
+
+
+v. Argumentar a favor o en contra de la hipótesis del investigador: “A mayor porcentaje de comidas gratis en la escuela es menor el desempeño...”
+
+
+```{r hipotesis-modelo-final}
+
+# Nuestro modelo 2  es: E(api00^2; meals) = beta_0 + beta_1 * meals
+# Ahora vamos a plantear la matriz para que evaluemos únicamente a beta_1 
+MatZ0Z1 <- matrix(c(0, 1), ncol = 2, nrow = 1)
+
+# Corremos la prueba formal unilateral usando alternative = "less" para poder evaluar si es menor
+pruebaV <- glht(Ajuste2, linfct = MatZ0Z1, rhs = 0, alternative = "less")
+summary(pruebaV)
+
+```
+
+
+## Interpretación original de la prueba
+
+Primero plantearemos una prueba de hipótesis unilateral sobre el coeficiente de nuestra variable x = 'meals' (beta_1) y esta prueba tomara las siguientes hipotesis: H0: beta_1 >= 0 (El porcentaje de comidas gratis NO disminuye el desempeño académico). Ha: beta_1 < 0  (A mayor procentaje de comidas gratis, el desempeño académico disminuye). Al ejecutar la prueba glht, nos da como resultado: -5337.7, coeficiente negativo y un p value de <2e-16 asi dado que p < 0.05, entonces rechazamos H0
+
+Asi entonces con el investigador nosotros argumentariamos a favor de la hipotesis del investigador, esto debido a la prueba de hipotesis unilateral anterior donde el resultado fue rechazar H0, es decir estamos a favor de la hipotesis. Por tanto conlcuiomos que a mayor porcentaje de alumnos que reciben comidas gratis, el desempeño académico de la escuela disminuye
+
