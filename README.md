@@ -19,4 +19,4 @@ El modelo ajustado con la variable que se transformo tuvo un coeficiente de dete
 ## Archivos 
 - Modelo_Regresion_Validacion_Supuestos.Rmd: código y desarrollo del trabajo
 - Modelo_Regresion_Validacion_Supuestos.pdf: reporte
-- performance.xlx: Base de datos 
+- performance.csv: Base de datos 
